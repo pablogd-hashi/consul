@@ -17,8 +17,8 @@ developers:
 - pablo.diaz@hashicorp.com
 show_timer: true
 skipping_enabled: true
-idle_timeout: 900
-timelimit: 2400
+idle_timeout: 3600
+timelimit: 7200
 lab_config:
   overlay: false
   width: 25

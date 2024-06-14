@@ -15,10 +15,6 @@ tabs:
   type: code
   hostname: cloud-client
   path: /root/consul
-- title: App Configs
-  type: code
-  hostname: cloud-client
-  path: /root/app
 - title: DC1
   type: service
   hostname: cloud-client
@@ -51,7 +47,7 @@ kubectl get secrets -n consul --kubeconfig /root/hashi-cluster-1-ctx.config
 
 Now, you can upgrade Consul in the first cluster:
 ```
-consul-k8s upgrade -f /root/consul/consul_values/dc1-ent.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
+consul-k8s upgrade -f /root/consul/consul_values/ent_dc1.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
 ```
 
 Jump to Terminal 2 and check how Consul Stateful sets is rolling out the new container images
@@ -63,7 +59,7 @@ kubectl get pods -n consul -w
 And also upgrade the second cluster:
 
 ```
-consul-k8s upgrade -f /root/consul/consul_values/dc2-ent.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
+consul-k8s upgrade -f /root/consul/consul_values/ent_dc2.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
 ```
 
 Expose both clusters:

@@ -17,7 +17,11 @@ notes:
     - Install Consul OSS version in both clusters
     - Deploy a backend and frontend application one on each cluster
 tabs:
-- title: GCPClient
+- title: GCP-Terminal-1
+  type: terminal
+  hostname: cloud-client
+tabs:
+- title: GCP-Terminal-2
   type: terminal
   hostname: cloud-client
 - title: Consul values
@@ -62,7 +66,7 @@ Check your contexts:
 kubectl config get-contexts
 ```
 
-We already deployed some K8s secrets for you in order to install Consul, including the `bootstrap token` and the Enterprise license.
+We already deployed some K8s secrets for you in order to install Consul, including the `bootstrap token` and the Enterprise license ( which will be use in the next challenge).
 
 You can check all the required secrets in both clusters:
 ```
@@ -77,7 +81,7 @@ Now, you can install Consul in the first cluster:
 consul-k8s install -namespace consul -f /root/consul/consul_values/dc1.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
 ```
 
-And also in the second cluster:
+Jump to Terminal-2 and install Consul in the second cluster:
 ```
 consul-k8s install -namespace consul -f /root/consul/consul_values/dc2.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
 ```
@@ -88,7 +92,10 @@ nohup kubectl port-forward svc/consul-ui 7443:443 --address 0.0.0.0 -n consul --
 nohup kubectl port-forward svc/consul-ui 8443:443 --address 0.0.0.0 -n consul --kubeconfig /root/hashi-cluster-1-ctx.config &
 ```
 
-Now let's deploy an application in both clusters. Frontend application will be hosted in cluster-0 and backend in cluster-1:
+`You should see them now available in DC1 and DC2 tab`
+
+
+It's time now to deploy an application in both clusters. Frontend application will be hosted in cluster-0 and backend in cluster-1:
 ```
 kubectl apply -f /root/consul/apps/backend.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
 kubectl apply -f /root/consul/apps/frontend.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
