@@ -1,0 +1,21 @@
+#!/bin/bash
+CLUSTER1="hashi-cluster-0"
+CLUSTER2="hashi-cluster-1"
+CONSUL_LICENSE="$HC_CONSUL_LICENSE"
+
+CONSUL_TOKEN="ConsulR0cks"
+DC1="dc1"
+DC2="dc2"
+KUBECONFIG1="/root/${CLUSTER1}-ctx.config"
+KUBECONFIG2="/root/${CLUSTER2}-ctx.config"
+
+if [ -f "$KUBECONFIG1" ] && [ -f "$KUBECONFIG2" ];then
+  for i in $KUBECONFIG1 $KUBECONFIG2; do
+   kubectl get svc consul-ui -n consul --kubeconfig $i || fail-message "I expected a consul deployment in both clusters"
+
+  done
+ 
+fi
+
+
+

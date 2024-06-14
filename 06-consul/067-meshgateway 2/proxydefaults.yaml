@@ -1,0 +1,17 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ProxyDefaults
+metadata:
+  name: global
+spec:
+  meshGateway:
+    mode: local
+  accessLogs:
+      enabled: true
+
+#There are two modes for routing traffic from local services to remote services when cluster peering connections are routed through mesh gateways. 
+#In remote mode, your local services contact the remote mesh gateway in order to reach remote services. 
+#In local mode, your local services contact their local gateway in order to reach remote services. 
+
+#We recommend you use local mode because most Kubernetes deployments do not allow local services to connect outside the cluster. 
+#The following configuration specifies local mode for traffic routed over the mesh gateways:
+

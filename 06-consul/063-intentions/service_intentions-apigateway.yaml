@@ -1,0 +1,11 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceIntentions
+metadata:
+  name: api-gateway-hashicups
+spec:
+  destination:
+    name: frontend
+  sources:
+    - name: api-gateway
+      action: allow
+

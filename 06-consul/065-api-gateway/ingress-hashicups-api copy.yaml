@@ -1,0 +1,10 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceIntentions
+metadata:
+  name: api-gateway-publicapi
+spec:
+  destination:
+    name: public-api
+  sources:
+    - name: api-gateway
+      action: allow

@@ -1,0 +1,30 @@
+slug: consul-enterprise-deploy-k8s
+id: wzpky094ekqe
+title: Deploy Consul Enterprise in Kubernetes
+teaser: Learn how to deploy Consul Enterprise in Kubernetes
+description: |-
+  How to migrate from Consul OSS to Enterprise
+
+  **This track demonstrates how to:**
+    - Deploy the two Consul clusters in GKE in different regions
+    - Install Consul OSS in both clusters
+    - Create ENT license as K8s secret
+    - Migrate Consul OSS to ENT using helm chart.
+icon: https://cdn.instruqt.com/assets/templates/kubernetes.png
+tags: []
+owner: hashicorp-field-ops
+developers:
+- pablo.diaz@hashicorp.com
+show_timer: true
+skipping_enabled: true
+idle_timeout: 900
+timelimit: 2400
+lab_config:
+  overlay: false
+  width: 25
+  position: right
+  sidebar_enabled: true
+  feedback_recap_enabled: true
+  loadingMessages: true
+  hideStopButton: false
+checksum: "11243735904405704853"

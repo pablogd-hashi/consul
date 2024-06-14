@@ -1,0 +1,41 @@
+global:
+  enterpriseLicense:
+    secretName: consul-ent-license
+    secretKey: key
+    enableLicenseAutoload: true
+  adminPartitions:
+    enabled: true
+    name: "default"
+  enableConsulNamespaces: true
+  image: hashicorp/consul-enterprise:1.18.1-ent
+  metrics:
+    enabled: true
+    enableAgentMetrics: true
+    agentMetricsRetentionTime: '1m'
+  tls:
+    enabled: true
+    httpsOnly: false
+  # acls:
+  #   manageSystemACLs: true
+  # gossipEncryption:
+  #   secretName: consul-gossip-encryption-key
+  #   secretKey: key
+server:
+  replicas: 1
+  exposeGossipAndRPCPorts: true
+  exposeService:
+    enabled: true
+    type: LoadBalancer
+    # If service is of type NodePort, configures the nodePorts.
+    # nodePort:
+    #   http: null
+    #   https: null
+    #   serf: null
+    #   rpc: null
+    #   grpc: null
+connectInject:
+  enabled: true
+  consulNamespaces:
+    mirroringK8S: true
+controller:
+  enabled: true

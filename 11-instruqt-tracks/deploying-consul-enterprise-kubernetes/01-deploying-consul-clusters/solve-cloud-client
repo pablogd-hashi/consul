@@ -1,0 +1,53 @@
+#!/bin/sh
+#!/bin/bash
+CLUSTER1="hashi-cluster-0"
+CLUSTER2="hashi-cluster-1"
+CONSUL_LICENSE="$HC_CONSUL_LICENSE"
+CONSUL_VERSION="1.18.2"
+CONSUL_TOKEN="ConsulR0cks"
+DC1="dc1"
+DC2="dc2"
+KUBECONFIG1="/root/${CLUSTER1}-ctx.config"
+KUBECONFIG2="/root/${CLUSTER2}-ctx.config"
+
+for i in {0..1};do
+  kubectl create secret generic consul-ent-license --from-literal key=$CONSUL_LICENSE -n consul --kubeconfig /root/hashi-cluster-$i-ctx.config
+done
+
+consul-k8s install -namespace consul -f /root/consul/consul_values/dc1.yaml --kubeconfig /root/hashi-cluster-0-ctx.config -auto-approve
+consul-k8s install -namespace consul -f /root/consul/consul_values/dc2.yaml --kubeconfig /root/hashi-cluster-1-ctx.config -auto-approve
+
+for i in {0..1}; do
+  kubectl apply -f /root/consul/consul_crds/mesh-peering.yaml --kubeconfig /root/hashi-cluster-$i-ctx.config
+done
+
+for i in {0..1}; do
+  kubectl apply -f /root/consul/consul_crds/proxy-defaults.yaml --kubeconfig /root/hashi-cluster-$i-ctx.config
+done
+
+kubectl apply -f /root/consul/consul_crds/peering-acceptor.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
+
+PEERING_SECRET="$(kubectl get peeringacceptors --kubeconfig /root/hashi-cluster-0-ctx.config -o jsonpath='{.status.secret.name}' dc2-default)"
+kubectl --kubeconfig /root/hashi-cluster-0-ctx.config get secret $PEERING_SECRET -o yaml | kubectl --kubeconfig /root/hashi-cluster-1-ctx.config apply -f -
+
+kubectl apply -f /root/consul/consul_crds/peering-dialer.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
+
+# cat <<EOF | tee /etc/nginx/passthrough.conf
+# ## tcp LB  and SSL passthrough for backend ##
+# stream {
+#     server {
+#         listen 7443;
+#         proxy_pass $(kubectl get svc/consul-ui -n consul -o jsonpath='{.status.loadBalancer.ingress[].ip}' --kubeconfig /root/hashi-cluster-0-ctx.config):443;
+#     }
+#     server {
+#         listen 8443;
+#         proxy_pass $(kubectl get svc/consul-ui -n consul -o jsonpath='{.status.loadBalancer.ingress[].ip}' --kubeconfig /root/hashi-cluster-1-ctx.config):443;
+#     }
+# }
+# EOF
+
+# echo "include /etc/nginx/passthrough.conf;" | tee -a /etc/nginx/nginx.conf
+
+# systemctl restart nginx
+
+echo "solved"

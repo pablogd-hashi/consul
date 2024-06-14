@@ -1,0 +1,110 @@
+#!/bin/bash 
+
+# Wait for the Instruqt host bootstrap to finish
+until [ -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
+do
+    sleep 1
+done
+
+CONSUL_K8S_VERSION="1.3.0"
+CONSUL_VERSION="1.18.2"
+#CONSUL_VERSION="1.18.2-ent"
+CONSUL_NS="consul"
+CLUSTER1="hashi-cluster-0"
+CLUSTER2="hashi-cluster-1"
+
+# # Re-creating the gcloud-sdk repo keys, because they can have some issues from default package.
+# rm /etc/apt/sources.list.d/google-cloud-sdk.list
+# curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+# echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+
+
+# Installing some packages
+curl https://baltocdn.com/helm/signing.asc | apt-key add -
+apt-get install apt-transport-https --yes
+echo "deb https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
+apt update 
+apt install -y docker.io helm bash-completion google-cloud-sdk-gke-gcloud-auth-plugin libnginx-mod-stream unzip jq
+
+# Adding HashiCorp Helm repos
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo update
+
+
+sleep 5
+
+# We need to source the generated variables from GCP
+source /etc/profile.d/instruqt-env.sh
+
+echo "===========>"
+echo "Project: $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_PROJECT_ID"
+echo "GCP SA: $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_SERVICE_ACCOUNT_EMAIL"
+echo "===========>"
+
+
+ gcloud container clusters create hashi-cluster-0 \
+  -m n2-standard-2 \
+  --num-nodes 3 \
+  --zone europe-southwest1-b \
+  --release-channel rapid \
+  --async
+
+  gcloud container clusters create hashi-cluster-1 \
+  -m n2-standard-2 \
+  --num-nodes 3 \
+  --zone europe-west1-c \
+  --release-channel rapid \
+  --async
+
+curl -s https://releases.hashicorp.com/consul-k8s/${CONSUL_K8S_VERSION}/consul-k8s_${CONSUL_K8S_VERSION}_linux_amd64.zip -o consul-k8s.zip
+unzip -o consul-k8s.zip
+mv consul-k8s /usr/local/bin
+
+
+# Downloading Consul Enterprise binary
+curl -s "https://releases.hashicorp.com/consul/${CONSUL_VERSION}+ent/consul_${CONSUL_VERSION}+ent_linux_amd64.zip" -o consul-ent.zip
+unzip -o consul-ent.zip
+mv consul /usr/local/bin/
+
+# Download kubectx
+curl -Ls https://github.com/ahmetb/kubectx/releases/download/v0.9.4/kubectx_v0.9.4_linux_x86_64.tar.gz -o kubectx.tar.gz
+tar -zxvf kubectx.tar.gz
+mv kubectx /usr/local/bin/
+
+echo -e "alias k=kubectl\nalias gke=\"gcloud container clusters\"\nalias kx=kubectx" >> /root/.bash_aliases
+echo "export USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> /root/.bashrc
+
+apt-get update && apt-get -y --only-upgrade install google-cloud-sdk-anthos-auth \
+google-cloud-sdk-gke-gcloud-auth-plugin \
+kubectl # \
+# google-cloud-sdk \
+# google-cloud-sdk-kpt \
+# google-cloud-sdk-minikube \
+# google-cloud-sdk-terraform-tools
+
+# We ran in parallel the creation of the two clusters, so we need to wait for both of them to be ready
+# We declare empty referenced variables to avoid unbound variables error when "set -u" is set
+CLUSTER1_STATUS=""
+CLUSTER2_STATUS=""
+
+while [ -z "$CLUSTER1_STATUS" ] && [ -z "$CLUSTER2_STATUS" ];do
+  CLUSTER1_STATUS="$(gcloud container clusters list --filter="name:$CLUSTER1" --format json | jq -r .[].status)"
+  CLUSTER2_STATUS="$(gcloud container clusters list --filter="name:$CLUSTER2" --format json | jq -r .[].status)"
+  # We add a check in case that clusters cannot be found
+  if [ -z $CLUSTER1_STATUS ] || [ -z $CLUSTER2_STATUS ] ;then
+    echo "\"$CLUSTER1\" status is \"$CLUSTER1_STATUS\""
+    echo "\"$CLUSTER2\" status is \"$CLUSTER2_STATUS\""
+    echo "Cannot find both GKE clusters \"$CLUSTER1\",\"$CLUSTER2\""
+    exit 1
+  fi
+  sleep 2
+  if [[ "$CLUSTER1_STATUS" == "RUNNING" ]] && [[ "$CLUSTER2_STATUS" == "RUNNING" ]];then
+    echo "Cluster \"$CLUSTER1\" is ready!"
+    echo "Cluster \"$CLUSTER2\" is ready!"
+    break
+  else
+    echo "Clusters not ready... $CLUSTER1_STATUS:$CLUSTER2_STATUS"
+    CLUSTER1_STATUS=""
+    CLUSTER2_STATUS=""
+  fi
+done

@@ -1,0 +1,12 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceIntentions
+metadata:
+  name: managedcloudsql
+spec:
+  destination:
+    name: managedcloudsql
+  sources:
+    - name: product-api
+      action: allow
+
+  # This intention allows traffic to flow from the HashiCups frontend services to the HashiCups backend database service.

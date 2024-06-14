@@ -1,0 +1,153 @@
+# Recommend leaving `global.name` defined, for better consistency of resource names in kubernetes
+
+# Recommend leaving `global.logLevel` defined, to give operaters an easy tunable to increase log verbosity without having to pull a copy of the full values.yaml and find where to make the change, or resorting to making the change elsewhere in config.
+
+# Do not use the 'latest' tag for images. Consul binary releases, consul helm chart releases, and consul-k8s-control-plane releases have narrow compatibility bands and should always be intentionally chosen.
+
+# Gossip encryption should be enabled, as protection from a rogue or misconfigured agent disrupting cluster composition
+
+# ACL system should be enabled via `global.acls.manageSystemACLs`
+
+# For production use, recommend setting `server.replicas` (and by extension, `server.bootstrapExpect`) to 5
+
+# Use `global.logLevel` rather than `server.extraConfig` to override the default logging level.
+
+# `server.storage` and `server.storageClass` should be explicitly defined to ensure a sufficiently high-performance single-writer storage class is chosen, rather then relying on the default SC assignment of the kube cluster.
+
+# `server.resources` should be explicitly defined. For production, recommend tuning `resources.limits` to the RAM and CPU requirements defined in the Consul reference architecture.
+
+# `server.updatePartition` should be left defined, as its value is critical to the Consul upgrade process
+
+# `server.snapshotAgent` should be configured on production clusters
+
+# Generally, I recommend starting with `connectInject.failurePolicy = "Ignore"`, until Consul adoption patterns have settled in. This way, while Consul is in a state of being deployed/configured/adopted, unavailability of the admission webhook controller won't cause all pod scheduling on the host to fail.
+
+# If service mesh is in use with multiple peers, recommend increasing `meshGateway.replicas` to at least 2 to prevent traffic disruption during rolling updates or node maintenance.
+
+# Recommend increasing `terminatingGateways.defaults.replicas` (or a per-gateway replica setting) as well, for similar reasons to above
+global:
+  name: consul
+  image: 'hashicorp/consul-enterprise:1.18-ent'
+  logLevel: "TRACE"
+  datacenter: consul-dc1
+  #Cluster Peering
+  peering:
+    enabled: true
+  # Security
+  gossipEncryption:
+     autoGenerate: true
+  acls:
+    manageSystemACLs: true
+   
+## Consul Enteprise Section
+  enterpriseLicense:
+    secretName: "consul-ent-license"
+    secretKey: "key"
+    enableLicenseAutoload: true
+
+
+# # Namespaces and Admin Partitions ( Enterprise Only)
+
+  enableConsulNamespaces: true
+  adminPartitions:
+   enabled: true
+   name: dta
+   service:
+     type: LoadBalancer
+
+# # Audit Logs
+  auditLogs:
+      enabled: true
+      sinks:
+        - name: Audit Logs
+          type: file
+          format: json
+          path: /tmp/audit-pgd.json
+          delivery_guarantee: best-effort
+          rotate_duration: 24h
+          rotate_max_files: 15
+          rotate_bytes: 25165824
+  
+  
+  tls:
+    enabled: true
+    # httpsOnly: true
+    # verify: true
+   
+   # Metrics
+  metrics:
+    enabled: true
+    enableAgentMetrics: true
+    enableGatewayMetrics: true # If true, mesh, terminating, and ingress gateways will expose their # Envoy metrics on port `20200` at the `/metrics` path and all gateway pods will have Prometheus scrape annotations
+    agentMetricsRetentionTime: "1m"
+  
+   
+
+  
+  # If true, the Helm chart will enable TLS for Consul
+  # servers and clients and all consul-k8s components, as well as generate certificate
+  # authority (optional) and server and client certificates.
+
+server:
+  replicas: 5
+  bootstrapExpect: 5
+  # Resources
+
+  resources:
+    requests:
+      memory: '400Mi'
+      cpu: '200m'
+    limits:
+      memory: '800Mi'
+      cpu: '400m'
+  storage: 10Gi
+
+  snapshotAgent:
+    # If true, the chart will install resources necessary to run the snapshot agent.
+    enabled: true
+    replicas: 2
+ 
+#Networking
+
+connectInject:
+  enabled: true
+  default: false
+  failurePolicy: "Ignore"
+  k8sAllowNamespaces: ["*"]
+  k8sDenyNamespaces: []
+  apiGateway:
+    managedGatewayClass:
+      serviceType: LoadBalancer
+
+terminatingGateways:
+  enabled: true
+  replicas: 2
+  
+meshGateway:
+  enabled: true
+  replicas: 2
+
+controller:
+  enabled: true
+
+#Metrics
+metrics:
+    defaultPrometheusScrapePort: 20200
+    defaultPrometheusScrapePath: "/metrics"
+
+
+ui:
+  enabled: true
+  dashboardURLTemplates:
+    service: "http://localhost:3000/d/hashicups/hashicups?orgId=1&refresh=30s/d/hashicups/hashicups?orgId=1&refresh=30s"
+  metrics:
+    enabled: true # by default, this inherits from the value global.metrics.enabled
+    provider: "prometheus"
+    baseURL: http://loki-prometheus-server.default.svc.cluster.local
+  service:
+    enabled: true
+    type: LoadBalancer
+# prometheus:
+#   enabled: false
+
+

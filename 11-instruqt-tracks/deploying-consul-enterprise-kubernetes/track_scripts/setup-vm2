@@ -1,0 +1,212 @@
+#!/bin/bash 
+
+# Wait for the Instruqt host bootstrap to finish
+until [ -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
+do
+    sleep 1
+done
+
+# Wait for the Kubernetes API server to become available
+while ! curl --silent --fail --output /dev/null http://localhost:8001/api 
+do
+    sleep 1 
+done
+
+# Enable bash completion for kubectl
+echo "source /usr/share/bash-completion/bash_completion" >> /root/.bashrc
+echo "complete -F __start_kubectl k" >> /root/.bashrc
+
+CONSUL_VERSION="1.18.2"
+CONSUL_K8S_VERSION="1.1.0"
+CONSUL_NS="consul"
+DEMO_TMP="/root/consul"
+CONSUL_PARTITION="second"
+
+
+# # Re-creating the gcloud-sdk repo keys, because they can have some issues from default package.
+# rm /etc/apt/sources.list.d/google-cloud-sdk.list
+# curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+# echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+
+
+# Installing some packages
+curl https://baltocdn.com/helm/signing.asc | apt-key add -
+apt-get install apt-transport-https --yes
+echo "deb https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
+apt update 
+apt install -y docker.io helm bash-completion
+
+# Adding HashiCorp Helm repos
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo update
+
+
+sleep 5
+
+# We need to source the generated variables from GCP
+source /etc/profile.d/instruqt-env.sh
+
+echo "===========>"
+echo "Project: $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_PROJECT_ID"
+echo "GCP SA: $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_SERVICE_ACCOUNT_EMAIL"
+echo "===========>"
+
+echo $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_SERVICE_ACCOUNT_KEY | base64 -d | tee credentials.json
+gcloud auth login --cred-file ./credentials.json --quiet
+
+
+curl -s https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip -o terraform.zip
+unzip -o terraform.zip
+cp terraform /usr/local/bin/
+
+# gsutil cp -r gs://$INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_PROJECT_ID/* /root/values/
+
+#  gcloud container clusters create hashi-cluster-0 \
+#   -m n2-standard-2 \
+#   --num-nodes 3 \
+#   --zone europe-southwest1-b \
+#   --release-channel rapid \
+#   --async
+
+#   gcloud container clusters create hashi-cluster-1 \
+#   -m n2-standard-2 \
+#   --num-nodes 3 \
+#   --zone europe-west1-c \
+#   --release-channel rapid \
+#   --async
+
+curl -s https://releases.hashicorp.com/consul-k8s/${CONSUL_K8S_VERSION}/consul-k8s_${CONSUL_K8S_VERSION}_linux_amd64.zip -o consul-k8s.zip
+unzip -o consul-k8s.zip
+mv consul-k8s /usr/local/bin
+
+
+# # Downloading Consul Enterprise binary
+# curl -s "https://releases.hashicorp.com/consul/${CONSUL_VERSION}+ent/consul_${CONSUL_VERSION}+ent_linux_amd64.zip" -o consul-ent.zip
+# unzip -o consul-ent.zip
+# mv consul /usr/local/bin/
+
+# # Downloading Vault Enterprise binary
+# curl -s "https://releases.hashicorp.com/vault/${VAULT_VERSION}+ent/vault_${VAULT_VERSION}+ent_linux_386.zip" -o vault-ent.zip
+# unzip -o vault-ent.zip
+# mv vault /usr/local/bin/
+
+# # Download Waypoint binary
+# curl -s https://releases.hashicorp.com/waypoint/${WAYPOINT_VERSION}/waypoint_${WAYPOINT_VERSION}_linux_amd64.zip -o waypoint.zip
+# unzip -o waypoint.zip
+# mv waypoint /usr/local/bin/
+
+
+mkdir -p $DEMO_TMP/crds
+
+  # Creating a backend service manifest
+cat - <<EOF | tee $DEMO_TMP/crds/backend.yaml > /dev/null
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: pablod-demo
+    tier: backend
+spec:
+  selector:
+    myapp: pablod-demo
+    tier: backend
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend
+  labels:
+    app: pablod-demo
+    tier: back
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: pablod-demo
+    myapp: pablod-demo
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      myapp: pablod-demo
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: pablod-demo
+        myapp: pablod-demo
+        tier: backend
+      annotations:
+        consul.hashicorp.com/connect-inject: "true"
+        consul.hashicorp.com/connect-service: "backend"
+    spec:
+      serviceAccount: backend
+      containers:
+      - name: backend
+        image: hcdcanadillas/pydemo-back:v1.2
+        imagePullPolicy: Always
+        ports:
+          - name: http
+            containerPort: 8080
+        env:
+          - name: PORT
+            value: "8080"
+EOF
+
+
+
+cat - <<EOF | tee $DEMO_TMP/crds/proxydefaults.yaml > /dev/null
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ProxyDefaults
+metadata:
+  name: global
+spec:
+  meshGateway:
+    mode: local
+  config:
+    protocol: http
+EOF
+
+cat - <<EOF | tee $DEMO_TMP/crds/exported-backend.yaml > /dev/null
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ExportedServices
+metadata:
+  name: second ## The name of the partition containing the service
+spec:
+  services:
+    - name: backend ## The name of the service you want to export
+      namespace: default
+      consumers:
+      - partition: default ## The name of the partition connection that receives the service
+    - name: mesh-gateway
+      namespace: default
+      consumers:
+        - partition: default
+EOF
+
+cat - <<EOF | tee $DEMO_TMP/crds/intention-frontend_default-backend_$CONSUL_PARTITION.yaml > /dev/null
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceIntentions
+metadata:
+  name: frontend-default-to-backend-second
+spec:
+  destination:
+    name: backend
+  sources:
+   - name: frontend
+     action: allow
+     partition: default
+EOF
+
+  echo ""
+  echo "All demo yaml files have been saved in directory \"$DEMO_TMP/crds\": "
+  ls -l $DEMO_TMP/crds
+  echo ""

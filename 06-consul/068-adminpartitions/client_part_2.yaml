@@ -1,0 +1,38 @@
+global:
+  enterpriseLicense:
+    secretName: consul-ent-license
+    secretKey: key
+  adminPartitions:
+    enabled: true
+    name: "part2"
+  enableConsulNamespaces: true
+  enabled: false
+  image: hashicorp/consul-enterprise:1.18.1-ent
+  tls:
+    enabled: true
+    caCert:
+      secretName: consul-consul-ca-cert
+      secretKey: tls.crt
+    caKey:
+      secretName: consul-consul-ca-key
+      secretKey: tls.key
+  acls:
+   manageSystemACLs: true
+
+  gossipEncryption:
+    secretName: consul-gossip-encryption-key
+    secretKey: key
+externalServers:
+  enabled: true
+  hosts: [34.67.232.139]
+  tlsServerName: server.consul-gke-sec.consul
+# client:
+#   enabled: true
+  exposeGossipPorts: true
+  join: [34.67.232.139]
+connectInject:
+  enabled: true
+  consulNamespaces:
+    mirroringK8S: true
+controller:
+  enabled: true

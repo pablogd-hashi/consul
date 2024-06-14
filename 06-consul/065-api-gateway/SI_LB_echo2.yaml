@@ -1,0 +1,10 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceIntentions
+metadata:
+  name: api-gateway-echo-2
+spec:
+  destination:
+    name: echo-2
+  sources:
+    - name: api-gateway
+      action: allow

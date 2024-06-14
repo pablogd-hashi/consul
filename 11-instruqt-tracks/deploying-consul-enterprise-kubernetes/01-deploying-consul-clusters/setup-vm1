@@ -1,0 +1,103 @@
+#!/bin/bash 
+
+# Wait for the Instruqt host bootstrap to finish
+until [ -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
+do
+    sleep 1
+done
+
+# Wait for the Kubernetes API server to become available
+while ! curl --silent --fail --output /dev/null http://localhost:8001/api 
+do
+    sleep 1 
+done
+
+# Enable bash completion for kubectl
+echo "source /usr/share/bash-completion/bash_completion" >> /root/.bashrc
+echo "complete -F __start_kubectl k" >> /root/.bashrc
+
+CLUSTER1="hashi-cluster-0"
+CLUSTER2="hashi-cluster-1"
+API_GW_VERSION="0.5.2"
+CONSUL_LICENSE="$HC_CONSUL_LICENSE"
+CONSUL_VERSION="1.18.2"
+CONSUL_TOKEN="$(uuidgen)"
+DC="dc1"
+CONSUL_NAMESPACE="consul"
+CONSUL_CA_CERT_SECRET="server-ca-cert"
+CONSUL_CA_KEY_SECRET="server-ca-key"
+CONSUL_PARTITION="second"
+DEMO_TMP="/root/consul"
+#KUBECONFIG1="/tmp/${CLUSTER1}-kube.config"
+#KUBECONFIG2="/tmp/${CLUSTER2}-kube.config"
+#touch $KUBECONFIG1
+#touch $KUBECONFIG2
+
+kubectl create ns consul
+# Not required from version 1.16.x
+# kubectl apply --kustomize="github.com/hashicorp/consul-api-gateway/config/crd?ref=v$API_GW_VERSION"
+
+kubectl delete secret consul-bootstrap-token -n consul
+kubectl create secret generic consul-ent-license --from-literal key=$CONSUL_LICENSE -n consul
+kubectl create secret generic consul-bootstrap-token --from-literal token=$CONSUL_TOKEN -n consul
+
+cat - <<EOF | tee $DEMO_TMP/consul-$DC.yaml > /dev/null
+global:
+  enabled: true
+  datacenter: $DC
+  name: consul
+  image: hashicorp/consul:$CONSUL_VERSION
+  logLevel: debug
+  # imageEnvoy: envoyproxy/envoy:v1.24.0
+  tls:
+    enabled: true
+    enableAutoEncrypt: true
+    verify: false
+  acls:
+    manageSystemACLs: true
+    bootstrapToken:
+      secretName: consul-bootstrap-token
+      secretKey: token
+   metrics:
+    enabled: true
+    enableGatewayMetrics: true
+server:
+  enabled: true
+  replicas: 1
+  # affinity:
+  extraConfig: |
+    {
+      "acl": {
+        "tokens": {
+          "default": "$CONSUL_TOKEN"
+        }
+      }
+    }
+ui:
+  enabled: true
+  service:
+    enabled: true
+      # We need to specify different ports for LBs services because K3S svc assigns everything to the same IP
+    port: 
+      https: 7443
+
+meshGateway:
+  enabled: true
+  enableHealthChecks: false
+  replicas: 1
+  service:
+    # We need to specify different ports for LBs services because K3S svc assigns everything to the same IP
+    port: 8443
+
+
+connectInject:
+  enabled: true
+controller:
+  enabled: true
+
+prometheus:
+  enabled: true
+
+EOF
+
+# consul-k8s install -namespace $CONSUL_NAMESPACE -f $DEMO_TMP/consul-$DC1.yaml

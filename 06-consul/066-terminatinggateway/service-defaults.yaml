@@ -1,0 +1,8 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceDefaults
+metadata:
+  name: managedcloudsql
+spec:
+  protocol: tcp
+
+  # To reach external services through the Consul terminating gateway, the external service must be registered in the Consul catalog.

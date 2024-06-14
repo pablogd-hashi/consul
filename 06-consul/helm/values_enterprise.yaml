@@ -1,0 +1,176 @@
+# Global settings
+global:
+  # Recommend leaving `global.name` defined for better consistency of resource names in Kubernetes
+  name: consul
+  # Docker image for Consul
+  image: 'hashicorp/consul-enterprise:1.18.1-ent' 
+  # Name of the datacenter
+  datacenter: consul
+  # Log level for Consul
+  logLevel: "DEBUG" 
+  # Recommend leaving `global.logLevel` defined to give operators an easy tunable to increase log verbosity without having to pull a copy of the full values.yaml and find where to make the change, or resorting to making the change elsewhere in config.
+  enterpriseLicense:
+    secretName: "consul-ent-license"
+    secretKey: "key"
+    enableLicenseAutoload: true
+  # Enable Consul Namespaces
+  enableConsulNamespaces: true
+  # Enable admin partitions
+  adminPartitions:
+    enabled: true
+    service:
+      type: LoadBalancer
+  # Gossip encryption should be enabled, as protection from a rogue or misconfigured agent disrupting cluster composition
+  # If you enable gossipEncryption and ACL at the same time, you must do it in 2 different steps. First Gossip, then ACL
+  gossipEncryption:
+    autoGenerate: true 
+  # ACL system should be enabled via `global.acls.manageSystemACLs`
+  # ACL must be enabled to configure audit logs.
+  acls:
+    manageSystemACLs: false 
+  # If true, the Helm chart will enable TLS for Consul servers and clients and all consul-k8s components, as well as generate certificate
+    # authority (optional) and server and client certificates.
+  tls:
+    enabled: true
+    httpsOnly: false
+
+  # Metrics
+  metrics:
+    enabled: true
+    enableAgentMetrics: true 
+    enableGatewayMetrics: true  # If true, mesh, terminating, and ingress gateways will expose their # Envoy metrics on port `20200` at the `/metrics` path and all gateway pods will have Prometheus scrape annotations
+    agentMetricsRetentionTime: "1m"
+    #enableTelemetryCollector: false #Configures the Helm chart’s components to forward envoy metrics for the Consul service mesh to the consul-telemetry-collector. This includes gateway metrics and sidecar metrics.
+    
+  
+  ## Cluster Peering
+  peering:
+    enabled: true
+
+  
+  # If true, the Helm chart will enable TLS for Consul
+  # servers and clients and all consul-k8s components, as well as generate certificate
+  # authority (optional) and server and client certificates.
+
+
+# SERVER SECTION
+server: 
+  replicas: 3 # For production use, recommend setting `server.replicas` (and by extension, `server.bootstrapExpect`) to 5
+  bootstrapExpect: 3
+
+  # # Audit Logs
+  auditLogs:
+      enabled: true
+      sinks:
+        - name: Audit Logs
+          type: file
+          format: json
+          path: /tmp/audit.json # recommend shipping logs to a file, not sdout
+          delivery_guarantee: best-effort
+          rotate_duration: 24h
+          rotate_max_files: 15
+          rotate_bytes: 25165824
+
+#Resources
+# `server.storage` and `server.storageClass` should be explicitly defined to ensure a sufficiently high-performance single-writer storage class is chosen, rather then relying on the default SC assignment of the kube cluster.
+
+  # resources: |
+  #     requests:
+  #       memory: "32Gi"
+  #       cpu: "4"
+  #     limits:
+  #       memory: "32Gi"
+  #       cpu: "4"
+
+  #   storage: 50Gi
+#Backup and Restore
+# `server.snapshotAgent` should be configured on production clusters
+# If true, the chart will install resources necessary to run the snapshot agent.
+  snapshotAgent:
+    enabled: true
+    replicas: 1
+    path: 
+
+# Networking
+
+
+connectInject:
+  enabled: true
+  default: true
+  k8sAllowNamespaces: ["*"]
+  k8sDenyNamespaces: ["grafana"]
+  apiGateway:
+    manageExternalCRDs: true
+    managedGatewayClass:
+      serviceType: LoadBalancer
+  #Metrics
+  metrics:
+    # defaultEnabled: false
+    defaultEnableMerging: true
+    defaultPrometheusScrapePort: 20200
+    defaultPrometheusScrapePath: "/metrics"
+
+terminatingGateways:
+  enabled: true
+  
+meshGateway:
+  enabled: true
+  replicas: 1
+
+controller:
+  enabled: true
+
+ui:
+  enabled: true
+  dashboardURLTemplates:
+    service: "http://localhost:3000/d/consul-gke/consul-gke?orgId=1&refresh=30s"
+  metrics:
+    #enabled: true # by default, this inherits from the value global.metrics.enabled
+    provider: "prometheus"
+    baseURL: http://loki-prometheus-server.grafana.svc.cluster.local
+  service:
+    enabled: true
+    type: LoadBalancer
+# prometheus:
+#   enabled: false
+
+# Vault backend configuration
+vault:
+  enabled: true
+  # Address of the Vault server
+  addr: "vault.service.consul:8200" 
+  # Token to authenticate with Vault
+  token: "your-vault-token" 
+  # Path in Vault where Consul secrets are stored
+  path: "secret/consul"
+  secretsBackend:
+    # Enable Vault as the secrets backend
+    vault:
+      enabled: true
+      # Namespace in which Vault is deployed
+      vaultNamespace: "vault"
+      # Role in Vault used by Consul servers to authenticate
+      consulServerRole: consul-server
+      # Role in Vault used by Consul for CA operations
+      consulCARole: consul-ca
+      # Role in Vault used by Consul for managing system ACLs
+      manageSystemACLsRole: server-acl-init
+      connectCA:
+        # Address of the Vault server
+        address: "http://vault.vault.svc:8200"
+        # Path in Vault where Consul's root PKI is stored
+        rootPKIPath: "${CLUSTER_NAME}/service_mesh_root_ca/"
+        # Path in Vault where Consul's intermediate PKI is stored
+        intermediatePKIPath: "${CLUSTER_NAME}/service_mesh_inter_ca/"
+        # Path in Vault where Consul's authentication method is configured
+        authMethodPath: "${CLUSTER_NAME}"
+        # Additional configuration for Connect CA in Vault
+        additionalConfig: |
+           {
+             "connect": [{
+               "ca_config": [{
+                    "leaf_cert_ttl": "1h",
+                    "intermediate_cert_ttl": "24h"
+                 }]
+             }]
+           } 

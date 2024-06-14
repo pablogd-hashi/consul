@@ -1,0 +1,22 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: api-gateway
+  namespace: consul
+spec:
+  gatewayClassName: consul
+  listeners:
+    # options: HTTP or HTTPS
+  - protocol: HTTP
+     # options: 80 or 443 or custom
+    port: 80
+    name: http
+    allowedRoutes:
+      namespaces:
+        # options: All or Same or Specific
+        from: All
+
+
+## This configuration file defines a Gateway object. This object is the main infrastructure resource that links all other related configuration information 
+## together. The spec itself defines listener and address details
+

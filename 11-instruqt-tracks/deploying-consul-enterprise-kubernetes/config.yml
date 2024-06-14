@@ -1,0 +1,35 @@
+version: "3"
+containers:
+- name: cloud-client
+  image: gcr.io/instruqt/cloud-client
+  shell: /bin/bash
+  ports:
+  - 80
+  - 7443
+  - 8443
+  - 9443
+virtualmachines:
+- name: vm1
+  image: instruqt/k3s-v1-25-0
+  shell: /bin/bash
+  machine_type: n1-standard-2
+- name: vm2
+  image: instruqt/k3s-v1-25-0
+  shell: /bin/bash
+  machine_type: n1-standard-2
+gcp_projects:
+- name: instruqt-pablogdz
+  services:
+  - cloudresourcemanager.googleapis.com
+  - compute.googleapis.com
+  - container.googleapis.com
+  - iam.googleapis.com
+  - iamcredentials.googleapis.com
+  - servicemanagement.googleapis.com
+  - storage-api.googleapis.com
+  - storage-component.googleapis.com
+  - networkmanagement.googleapis.com
+  - artifactregistry.googleapis.com
+  roles: []
+secrets:
+- name: HC_CONSUL_LICENSE

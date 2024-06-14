@@ -1,0 +1,93 @@
+global:
+  name: consul
+  image: 'hashicorp/consul:1.17.1'
+  datacenter: consul
+  logLevel: "TRACE"
+ 
+  # Security
+  gossipEncryption:
+    autoGenerate: true
+
+  acls:
+    manageSystemACLs: true
+
+  tls:
+    enabled: true
+    #httpsOnly: false
+    # verify: true
+   
+   # Metrics
+  metrics:
+    enabled: true
+    enableAgentMetrics: true
+    enableGatewayMetrics: true # If true, mesh, terminating, and ingress gateways will expose their # Envoy metrics on port `20200` at the `/metrics` path and all gateway pods will have Prometheus scrape annotations
+    agentMetricsRetentionTime: "1m"
+  
+   
+#Cluster Peering
+  peering:
+    enabled: true
+  
+  # If true, the Helm chart will enable TLS for Consul
+  # servers and clients and all consul-k8s components, as well as generate certificate
+  # authority (optional) and server and client certificates.
+
+server:
+  replicas: 3
+  bootstrapExpect: 3
+
+
+  # # Audit Logs
+# auditLogs:
+#       enabled: true
+#       sinks:
+#         - name: Audit Logs
+#           type: file
+#           format: json
+#           path: /tmp/audit-pgd.json
+#           delivery_guarantee: best-effort
+#           rotate_duration: 24h
+#           rotate_max_files: 15
+#           rotate_bytes: 25165824
+ 
+#Networking
+
+connectInject:
+  enabled: true
+  default: true
+  k8sAllowNamespaces: ["*"]
+  k8sDenyNamespaces: []
+  apiGateway:
+    manageExternalCRDs: true
+    managedGatewayClass:
+      serviceType: LoadBalancer
+
+terminatingGateways:
+  enabled: true
+  
+meshGateway:
+  enabled: true
+  replicas: 1
+
+controller:
+  enabled: true
+
+#Metrics
+metrics:
+    defaultPrometheusScrapePort: 20200
+    defaultPrometheusScrapePath: "/metrics"
+
+
+ui:
+  enabled: true
+  # dashboardURLTemplates:
+  #   service: "http://localhost:3000/d/hashicups/hashicups?orgId=1&refresh=30s/d/hashicups/hashicups?orgId=1&refresh=30s"
+  metrics:
+    enabled: true # by default, this inherits from the value global.metrics.enabled
+    provider: "prometheus"
+    #baseURL: http://loki-prometheus-server.default.svc.cluster.local
+  service:
+    enabled: true
+    type: LoadBalancer
+# prometheus:
+#   enabled: false

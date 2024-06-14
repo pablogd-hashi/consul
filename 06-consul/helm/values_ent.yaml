@@ -1,0 +1,139 @@
+global:
+  name: consul # Recommend leaving `global.name` defined, for better consistency of resource names in kubernetes
+  image: 'hashicorp/consul-enterprise:1.18.1-ent' 
+  datacenter: consul
+  logLevel: "DEBUG" 
+  # Recommend leaving `global.logLevel` defined, to give operaters an easy tunable to increase log verbosity without having to pull a copy of the full values.yaml and find where to make the change, or resorting to making the change elsewhere in config.
+# # Consul Enteprise Section
+  enterpriseLicense:
+    secretName: "consul-ent-license"
+    secretKey: "key"
+    enableLicenseAutoload: true
+
+# # Namespaces and Admin Partitions ( Enterprise Only)
+
+  enableConsulNamespaces: true
+  adminPartitions:
+   enabled: true
+   service:
+     type: LoadBalancer
+
+ 
+  # Security
+  # Gossip encryption should be enabled, as protection from a rogue or misconfigured agent disrupting cluster composition
+  # If you enable gossipEncryption and ACL at the same time, you must do it in 2 different steps. First Gossip, then ACL
+  gossipEncryption:
+    autoGenerate: true 
+
+# ACL system should be enabled via `global.acls.manageSystemACLs`
+# ACL must be enabled to inorder to configure audit logs.
+  acls:
+    manageSystemACLs: true 
+
+# If true, the Helm chart will enable TLS for Consul servers and clients and all consul-k8s components, as well as generate certificate
+    # authority (optional) and server and client certificates.
+  tls:
+    enabled: true
+    httpsOnly: false
+    # verify: true
+   
+# Metrics
+  metrics:
+    enabled: true
+    enableAgentMetrics: true 
+    enableGatewayMetrics: true  # If true, mesh, terminating, and ingress gateways will expose their # Envoy metrics on port `20200` at the `/metrics` path and all gateway pods will have Prometheus scrape annotations
+    agentMetricsRetentionTime: "1m"
+    #enableTelemetryCollector: false #Configures the Helm chart’s components to forward envoy metrics for the Consul service mesh to the consul-telemetry-collector. This includes gateway metrics and sidecar metrics.
+    
+  
+  
+## Cluster Peering
+  peering:
+    enabled: true
+
+  
+  # If true, the Helm chart will enable TLS for Consul
+  # servers and clients and all consul-k8s components, as well as generate certificate
+  # authority (optional) and server and client certificates.
+
+
+# SERVER SECTION
+server: 
+  replicas: 3 # For production use, recommend setting `server.replicas` (and by extension, `server.bootstrapExpect`) to 5
+  bootstrapExpect: 3
+
+  # # Audit Logs
+  # auditLogs:
+  #     enabled: true
+  #     sinks:
+  #       - name: Audit Logs
+  #         type: file
+  #         format: json
+  #         path: /dev/stdout
+  #         delivery_guarantee: best-effort
+  #         rotate_duration: 24h
+  #         rotate_max_files: 15
+  #         rotate_bytes: 25165824
+
+#Resources
+# `server.storage` and `server.storageClass` should be explicitly defined to ensure a sufficiently high-performance single-writer storage class is chosen, rather then relying on the default SC assignment of the kube cluster.
+
+  # resources: |
+  #     requests:
+  #       memory: "32Gi"
+  #       cpu: "4"
+  #     limits:
+  #       memory: "32Gi"
+  #       cpu: "4"
+
+  #   storage: 50Gi
+#Backup and Restore
+# `server.snapshotAgent` should be configured on production clusters
+# If true, the chart will install resources necessary to run the snapshot agent.
+  snapshotAgent:
+    enabled: true
+    replicas: 1
+    path: 
+
+# Networking
+
+
+connectInject:
+  enabled: true
+  default: true
+  # k8sAllowNamespaces: ["*"]
+  # k8sDenyNamespaces: ["grafana"]
+  apiGateway:
+    manageExternalCRDs: true
+    managedGatewayClass:
+      serviceType: LoadBalancer
+  #Metrics
+  metrics:
+    # defaultEnabled: false
+    defaultEnableMerging: true
+    defaultPrometheusScrapePort: 20200
+    defaultPrometheusScrapePath: "/metrics"
+
+terminatingGateways:
+  enabled: true
+  
+meshGateway:
+  enabled: true
+  replicas: 1
+
+controller:
+  enabled: true
+
+ui:
+  enabled: true
+  dashboardURLTemplates:
+    service: "http://localhost:3000/d/consul-gke/consul-gke?orgId=1&refresh=30s"
+  metrics:
+    #enabled: true # by default, this inherits from the value global.metrics.enabled
+    provider: "prometheus"
+    baseURL: http://loki-prometheus-server.grafana.svc.cluster.local
+  service:
+    enabled: true
+    #type: LoadBalancer
+# prometheus:
+#   enabled: false

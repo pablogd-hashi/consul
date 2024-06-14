@@ -1,0 +1,19 @@
+
+{
+    "OIDCDiscoveryURL": "https://gitlab.com",
+    "OIDCClientID": "...",
+    "OIDCClientSecret": "...",
+    "BoundAudiences": ["5f66c42a6b2f432a06a9604cdede8f1e7d6d01e4af8a0bf4190d16ef9826db43"],
+    "AllowedRedirectURIs": [
+      "https://192.168.2.10/ui/oidc/callback",
+      "https://localhost/ui/oidc/callback",
+      "https://192.168.2.10:8550/oidc/callback",
+      "https://localhost:8550/oidc/callback "
+    ],
+    "ClaimMappings": {
+      "nickname": "nickname"
+    },
+    "ListClaimMappings": {
+      "groups": "groups"
+    }
+  }

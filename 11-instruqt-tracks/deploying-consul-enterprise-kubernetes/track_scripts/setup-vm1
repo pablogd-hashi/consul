@@ -1,0 +1,153 @@
+#!/bin/bash 
+
+# Wait for the Instruqt host bootstrap to finish
+until [ -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
+do
+    sleep 1
+done
+
+# Wait for the Kubernetes API server to become available
+while ! curl --silent --fail --output /dev/null http://localhost:8001/api 
+do
+    sleep 1 
+done
+
+# Enable bash completion for kubectl
+echo "source /usr/share/bash-completion/bash_completion" >> /root/.bashrc
+echo "complete -F __start_kubectl k" >> /root/.bashrc
+
+WAYPOINT_VERSION="0.11.0"
+CONSUL_VERSION="1.18.2"
+CONSUL_K8S_VERSION="1.1.0"
+CONSUL_NS="consul"
+DEMO_TMP="/root/consul"
+
+# # Re-creating the gcloud-sdk repo keys, because they can have some issues from default package.
+# rm /etc/apt/sources.list.d/google-cloud-sdk.list
+# curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+# echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+
+
+# Installing some packages
+curl https://baltocdn.com/helm/signing.asc | apt-key add -
+apt-get install apt-transport-https --yes
+echo "deb https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
+apt update 
+apt install -y docker.io helm
+
+# Adding HashiCorp Helm repos
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo update
+
+
+sleep 5
+
+# We need to source the generated variables from GCP
+source /etc/profile.d/instruqt-env.sh
+
+echo "===========>"
+echo "Project: $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_PROJECT_ID"
+echo "GCP SA: $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_SERVICE_ACCOUNT_EMAIL"
+echo "===========>"
+
+echo $INSTRUQT_GCP_PROJECT_INSTRUQT_PABLOD_SERVICE_ACCOUNT_KEY | base64 -d | tee credentials.json
+gcloud auth login --cred-file ./credentials.json --quiet
+
+
+curl -s "https://releases.hashicorp.com/consul-k8s/${CONSUL_K8S_VERSION}/consul-k8s_${CONSUL_K8S_VERSION}_linux_amd64.zip" -o consul-k8s.zip
+unzip -o consul-k8s.zip
+mv consul-k8s /usr/local/bin
+
+
+# #
+
+# # Downloading Vault Enterprise binary
+# curl -s "https://releases.hashicorp.com/vault/${VAULT_VERSION}+ent/vault_${VAULT_VERSION}+ent_linux_386.zip" -o vault-ent.zip
+# unzip -o vault-ent.zip
+# mv vault /usr/local/bin/
+
+# # Download Waypoint binary
+# curl -s "https://releases.hashicorp.com/waypoint/${WAYPOINT_VERSION}/waypoint_${WAYPOINT_VERSION}_linux_amd64.zip" -o waypoint.zip
+# unzip -o waypoint.zip
+# mv waypoint /usr/local/bin/
+
+mkdir -p $DEMO_TMP/crds
+
+# Creating a demo frontend service manifest
+cat - <<EOT | tee $DEMO_TMP/crds/frontend.yaml > /dev/null
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    myapp: pablod-demo
+    tier: front
+spec:
+  selector:
+    myapp: pablod-demo
+    tier: front
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend
+  labels:
+    app: pablod-demo
+    tier: front
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: pablod-demo
+    tier: front
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pablod-demo
+      tier: front
+  template:
+    metadata:
+      labels:
+        app: pablod-demo
+        tier: front
+        myapp: pablod-demo
+      annotations:
+        consul.hashicorp.com/connect-inject: "true"
+        consul.hashicorp.com/connect-service: "frontend"
+        consul.hashicorp.com/service-tags: v1.3
+        # consul.hashicorp.com/connect-service-upstreams: "backend:9090"
+    spec:
+      serviceAccountName: frontend
+      containers:
+        - name: frontend
+          image: hcdcanadillas/pydemo-front:v1.3
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: BACKEND_URL
+              # value: "http://backend:8080"
+              value: "http://backend.virtual.second.ap.consul:8080"
+EOT
+
+cat - <<EOF | tee $DEMO_TMP/crds/proxydefaults.yaml > /dev/null
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ProxyDefaults
+metadata:
+  name: global
+spec:
+  meshGateway:
+    mode: local
+  config:
+    protocol: http
+EOF

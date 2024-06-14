@@ -1,0 +1,92 @@
+#!/bin/bash 
+
+# Wait for the Instruqt host bootstrap to finish
+until [ -f /opt/instruqt/bootstrap/host-bootstrap-completed ]
+do
+    sleep 1
+done
+
+# Wait for the Kubernetes API server to become available
+while ! curl --silent --fail --output /dev/null http://localhost:8001/api 
+do
+    sleep 1 
+done
+
+# Enable bash completion for kubectl
+echo "source /usr/share/bash-completion/bash_completion" >> /root/.bashrc
+echo "complete -F __start_kubectl k" >> /root/.bashrc
+
+CLUSTER1="hashi-cluster-0"
+CLUSTER2="hashi-cluster-1"
+API_GW_VERSION="0.5.2"
+CONSUL_LICENSE="02MV4UU43BK5HGYYTOJZWFQMTMNNEWU33JLJVES52OIRATITLNLF2FSV2SNBHVGMDZJVKES6KMKRITKTLKNN2FSV2RO5NEIWJSJ5CEU2KNNJIXSSLJO5UVSM2WPJSEOOLULJMEUZTBK5IWST3JJF4FS6SRGBGXURJQJV4TAMKPK5JG2TCUKUYU4V2JORGTERTJJVUTA6SNPJRTITSEKJWU2R2KNJNGUVLJJRBUU4DCNZHDAWKXPBZVSWCSOBRDENLGMFLVC2KPNFEXCSLJO5UWCWCOPJSFOVTGMRDWY5C2KNETMSLKJF3U22SJORGVIQLUJVKE4VKNNJATMTKUIU3E4VCBOVGXUZ3ZJZVES6CONJAXQV3JJFZUS3SOGBMVQSRQLAZVE4DCK5KWST3JJF4U2RCJPFGFIRLXJRKEK6SWIRAXOT3KIF3U62SBO5LWSSLTJFWVMNDDI5WHSWKYKJYGEMRVMZSEO3DULJJUSNSJNJEXOTLKJV2E2VCBORGVITSVJVVE2NSOKRVTMTSUNN2U6VDLGVLWSSLTJFXFE3DDNUYXAYTNIYYGCVZZOVMDGUTQMJLVK2KPNFEXSTKEJF5EYVCFO5GFISLXKZCEC52PNJAXOT3KIF3VO2KJONEW4QTZMIZFEMKZGNIWST3JJJVGEMRVPJSFO53JJRBUU3LCI5DG4Y3ZJE3GK6KKORRDEURRMJDVM6SJNJYGESLNMRZWEMSKNBREGMJSMFME44CZNVWHGYKYKI2UYWCKOZSFQUTQMJWWG5DDGJHGQYSHKVUUYQ2KNZRDGWTMMNWTK2DCNVHGYTCYIJ3GER3MNJSVGSTEMZMDAPJOKJ4DOZRUKVDXCSKGNZFXSOLHJJXWSWCEI5BS63CEOVBG62SIKQYE22JXNRSFEM3YLFCWQVTIKJ4DATCDNB3GESBQJBWXO5ZLOBFFE3LMHFJVM5DMIRGEO4SYNJCTMRDGGU3TGMSEGUYWIQLLMNQTIZCWGAZTGOCQO5WVM3DBOZFFANDQJJ4ESSJZIQ3FKRSMKVQVMUDKNNLUU5DDIQ3HAYLMGZXU6ZSHNZFTE6SQJNFFE3KHJBLDGZK2O5YUMZJLN43WWL3TFNAVITTIKBNGOUZPJNLFSZZPJMVWYR2QO5GDO2SCPBETOR2PMFVTMVLBNFQUQ33FNMYFEVDPG4ZEIUJ5HU"
+CONSUL_VERSION="1.18.2"
+CONSUL_TOKEN="$(uuidgen)"
+DC="dc2"
+CONSUL_NAMESPACE="consul"
+CONSUL_CA_CERT_SECRET="server-ca-cert"
+CONSUL_CA_KEY_SECRET="server-ca-key"
+CONSUL_PARTITION="second"
+DEMO_TMP="/root/consul"
+INSTANCE_IP="$(curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ip)"
+#
+
+cat - <<EOF | tee $DEMO_TMP/consul-$DC-partition.yaml > /dev/null
+global:
+  enabled: true
+  datacenter: $DC
+  name: consul
+  image: hashicorp/consul:$CONSUL_VERSION
+  logLevel: debug
+  tls:
+    verify: false
+    enabled: true
+    enableAutoEncrypt: true
+    caKey:
+      secretName: $CONSUL_CA_KEY_SECRET
+      secretKey: tls.key
+    caCert:
+      secretName: $CONSUL_CA_CERT_SECRET
+      secretKey: tls.crt
+  acls:
+    manageSystemACLs: true
+    bootstrapToken:
+      secretName: consul-bootstrap-token
+      secretKey: token
+  
+  metrics:
+    enabled: true
+    enableGatewayMetrics: true
+ # dns:
+#   enabled: true
+#   enableRedirection: true
+
+server:
+  enabled: false
+externalServers:
+  enabled: true
+  hosts: ["vm1"]
+  tlsServerName: server.dc1.consul
+  k8sAuthMethodHost: "https://$INSTANCE_IP:6443"
+  # httpsPort: 8501
+
+meshGateway:
+  enabled: true
+  enableHealthChecks: false
+  replicas: 1
+  service:
+    # We need to specify different ports for LBs services because K3S svc assigns everything to the same IP
+    port: 8443
+
+connectInject:
+  enabled: true
+
+EOF
+
+# helm repo add hashicorp https://helm.releases.hashicorp.com
+# helm repo update
+# helm install consul -n $CONSUL_NAMESPACE \
+# -f /tmp/consul-$DC1-partition.yaml \
+# hashicorp/consul \
+# --version $CONSUL_K8S_VERSION \
+# --debug --wait

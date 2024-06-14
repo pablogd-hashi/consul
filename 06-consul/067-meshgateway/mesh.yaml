@@ -1,0 +1,10 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: Mesh
+metadata:
+  name: mesh
+spec:
+  peering:
+    peerThroughMeshGateways: true
+
+#Connect proxy configuration Modes are not applicable to peering control plane traffic. 
+#The flow of control plane traffic through the gateway is implied by the presence of a Mesh config entry with PeerThroughMeshGateways = true.
