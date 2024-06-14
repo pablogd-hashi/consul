@@ -90,8 +90,8 @@ nohup kubectl port-forward svc/consul-ui 8443:443 --address 0.0.0.0 -n consul --
 
 Now let's deploy an application in both clusters. Frontend application will be hosted in cluster-0 and backend in cluster-1:
 ```
-kubectl apply -f /root/app/backend.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
-kubectl apply -f /root/app/frontend.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
+kubectl apply -f /root/consul/apps/backend.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
+kubectl apply -f /root/consul/apps/frontend.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
 ```
 
 

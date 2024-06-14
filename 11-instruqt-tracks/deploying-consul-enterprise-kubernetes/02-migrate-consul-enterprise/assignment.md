@@ -5,6 +5,9 @@ type: challenge
 title: Deploy Consul Enterprise on Kubernetes
 teaser: Migrate from Consul OSS to Enterprise via helm chart.
 tabs:
+- title: GCPTerminal-1
+  type: terminal
+  hostname: cloud-client
 - title: GCPTerminal-2
   type: terminal
   hostname: cloud-client
@@ -32,13 +35,13 @@ tabs:
   path: /
   port: 80
 difficulty: basic
-timelimit: 7200
+timelimit: 15000
 ---
 
 Deploy Consul Enterprise
 =============================
 
-We are going to deploy Consul Enterprise using an update version of the helm chart. If you go to ** Consul Configs** tab you will see that there's a new ent_dc1.yaml and new_en file. In there, a new section for Enterprise Licence and a new **image** have been added.
+We are going to deploy Consul Enterprise using an update version of the helm chart. If you go to ** Consul Configs** tab you will see that there's a new dc1-ent.yaml file. In there, a new section for Enterprise Licence and a new **image** have been added.
 
 Before installing the Consul Enterprise container, we need to confirm that the license has been stored as a secret
 ```
@@ -46,14 +49,21 @@ kubectl get secrets -n consul --kubeconfig /root/hashi-cluster-0-ctx.config
 kubectl get secrets -n consul --kubeconfig /root/hashi-cluster-1-ctx.config
 ```
 
-Now, you can install Consul in the first cluster:
+Now, you can upgrade Consul in the first cluster:
 ```
-consul-k8s install -namespace consul -f /root/consul/consul_values/dc1-ent.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
+consul-k8s upgrade -f /root/consul/consul_values/dc1-ent.yaml --kubeconfig /root/hashi-cluster-0-ctx.config
 ```
 
-And also in the second cluster:
+Jump to Terminal 2 and check how Consul Stateful sets is rolling out the new container images
+
 ```
-consul-k8s install -namespace consul -f /root/consul/consul_values/dc2-ent.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
+kubectl get pods -n consul -w
+```
+
+And also upgrade the second cluster:
+
+```
+consul-k8s upgrade -f /root/consul/consul_values/dc2-ent.yaml --kubeconfig /root/hashi-cluster-1-ctx.config
 ```
 
 Expose both clusters:
@@ -61,4 +71,17 @@ Expose both clusters:
 nohup kubectl port-forward svc/consul-ui 7443:443 --address 0.0.0.0 -n consul --kubeconfig /root/hashi-cluster-0-ctx.config &
 nohup kubectl port-forward svc/consul-ui 8443:443 --address 0.0.0.0 -n consul --kubeconfig /root/hashi-cluster-1-ctx.config &
 ```
+
+Once upgrade is completed, jump to DC1 and DC2 tab and you should see "Admin Partitions" and "Namespaces" in the left side menu ( both Enterprise features)
+
+To make sure the license has been applied and you are running Consul Enterprise, run this command from the GCPTerminal
+
+```
+kubectl exec -it consul-server-0 -n consul -- consul license get --kubeconfig /root/hashi-cluster-0-ctx.config
+
+kubectl exec -it consul-server-0 -n consul -- consul license get --kubeconfig /root/hashi-cluster-1-ctx.config
+```
+
+You should see "License Active" and all the features enabled. Congrats you are now running Consul Enterprise!
 ---
+
